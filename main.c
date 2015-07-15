@@ -108,6 +108,8 @@ void post() {
     if (!(flash_error || led_error || crystal_error))
         return;
 
+    // TODO: try sending something with the radio.
+
     // Otherwise, show those errors and then delay for a bit so we can
     // see them.
     GrClearDisplay(&g_sContext);
