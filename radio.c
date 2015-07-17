@@ -120,7 +120,7 @@ void init_radio() {
 	write_single_register(0x25, 0b00000000); // GPIO map to default
 
     for (uint8_t sync_addr=0x2f; sync_addr<=0x36; sync_addr++) {
-        write_single_register(sync_addr, "QCXI"[sync_addr%4]);
+        write_single_register(sync_addr, "TEST"[sync_addr%4]);
     }
 
 	// Setup addresses and length:
@@ -131,6 +131,9 @@ void init_radio() {
 
 	write_single_register(0x3c, 0x80 | (sizeof(qc12payload)-1)); // TxStartCondition - FifoNotEmpty
 
+	// Make a big, brief radio spike when we first turn on...
+	mode_sync(RFM_MODE_TX);
+	delay(2000);
 
 	// Now that we're done with this setup business, we can enable the
 	// DIO interrupts. We have to wait until now because otherwise if

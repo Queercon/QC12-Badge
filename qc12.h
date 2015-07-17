@@ -83,6 +83,7 @@ extern volatile uint8_t f_rfm_tx_done;
 typedef struct {
 	uint8_t to_addr, from_addr, base_id;
 	uint8_t beacon;
+	uint8_t padding[40];
 } qc12payload;
 
 extern qc12payload in_payload, out_payload;
