@@ -98,6 +98,7 @@ void post() {
     led_error = led_error || tlc_test_loopback(0b01010101);
 
     // Check the flash chip.
+    tlc_set_fun();
     EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
     EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_TRANSMIT_INTERRUPT);
     uint8_t flash_error = flash_post();

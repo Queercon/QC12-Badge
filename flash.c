@@ -211,8 +211,7 @@ void usci_a_send(uint16_t base, uint8_t data) {
 // Returns 1 if a problem is detected.
 uint8_t flash_post() {
     volatile uint8_t status;
-    volatile uint8_t initial_status = flash_get_status(); // TODO...
-    initial_status = flash_get_status();
+    volatile uint8_t initial_status = flash_get_status();
     flash_wr_en();
     status = flash_get_status();
     if (status != (initial_status | BIT1))
