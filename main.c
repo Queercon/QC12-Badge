@@ -138,6 +138,19 @@ void post() {
 
 // Play a cute animation when we first turn the badge on.
 void intro() {
+    tRectangle whole_screen = {0, 0, 64, 128};
+
+    GrContextForegroundSet(&g_sContext, ClrWhite);
+    GrRectFill(&g_sContext, &whole_screen);
+    GrFlush(&g_sContext);
+    delay(2000);
+    GrContextForegroundSet(&g_sContext, ClrBlack);
+    GrRectFill(&g_sContext, &whole_screen);
+    GrFlush(&g_sContext);
+    delay(1000);
+
+    GrContextForegroundSet(&g_sContext, ClrWhite);
+
     GrImageDraw(&g_sContext, &fingerprint_1BPP_UNCOMP, 0, 0);
     GrStringDrawCentered(&g_sContext, "Queercon", -1, 31, 94 + SYS_FONT_HEIGHT/3, 0);
     GrStringDrawCentered(&g_sContext, "twelve", -1, 31, 94 + SYS_FONT_HEIGHT/3 + SYS_FONT_HEIGHT, 0);
@@ -276,10 +289,17 @@ void get_name() {
 int main(void)
 {
     init();
-    post();
     intro(); // Play a cute animation when we first turn the badge on.
-    delay(8000);
-    get_name(); // Learn the badge's name (if we don't have it already)
+    post();
+
+    // Fart something out on the radio.
+    radio_send_sync();
+    delay(1000);
+    radio_send_sync();
+    delay(1000);
+    radio_send_sync();
+
+    tlc_start_anim(rainbow2, 5, 60, 1);
 
     // Reset all the flags after leaving the intro/post/name entry:
     f_bl = f_br = f_bs = f_new_second = 0;
@@ -295,16 +315,6 @@ int main(void)
     tlc_set_fun();
 
     while (1) {
-        // The following operating modes are possible:
-        //   [ ] POST/intro (handled above)
-        //   [ ] Name setting (handled above)
-        //   [ ] Friend request (outgoing or accepting)
-        //   [ ] Status summary
-        //   [ ] Flag setting?
-        //   [ ] Character/idle
-        //       (this is the big, main one, and event/actions are queued or
-        //        ignored until we return to this mode.)
-        //   [ ] Sleep mode?
 
         if (f_time_loop) {
             f_time_loop = 0;
