@@ -15,6 +15,7 @@
 
 #define RFM_MODE_RX 0b00010000
 #define RFM_MODE_SB 0b00000100
+#define RFM_MODE_TX 0b00001100
 
 #define RFM_IRQ1 0x27
 #define RFM_IRQ2 0x28
