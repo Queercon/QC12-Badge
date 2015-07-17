@@ -19,6 +19,8 @@ typedef struct {
     int_fast32_t blue;
 } rgbdelta_t;
 
+extern rgbcolor_t rainbow2[5];
+
 void init_tlc();
 
 uint8_t tlc_test_loopback(uint8_t);

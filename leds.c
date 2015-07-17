@@ -63,7 +63,7 @@ rgbcolor_t rainbow2[5] = {
         { 0xff00, 0x00, 0x00 },
         { 0x00, 0xff00, 0x00 },
         { 0x00, 0x00, 0xff00 },
-        { 0xe00, 0xe00, 0xe00 },
+        { 0xff00, 0xff00, 0xff00 },
         { 0x00, 0x00, 0x000 },
 };
 
@@ -229,10 +229,6 @@ void init_tlc() {
 
     tlc_stage_blank(1);
     tlc_set_fun();
-
-
-    tlc_start_anim(rainbow2, 5, 10, 0);
-
 }
 
 void tlc_load_colors() {
@@ -316,11 +312,11 @@ void tlc_timestep() {
         // If the shift will overflow, we're finished.
         // TODO: unless we're looping?
         if (tlc_light_offset == tlc_curr_anim_len) {
-            led_anim_mode = TLC_ANIM_MODE_IDLE;
-        } else {
-            // Otherwise load the next color sets.
-            tlc_load_colors();
+//            led_anim_mode = TLC_ANIM_MODE_IDLE;
+            tlc_light_offset = 0;
         }
+        // load the next color sets.
+        tlc_load_colors();
     } else { // Otherwise, we're still fading...
         // Compute the next step fade.
         tlc_fade_colors();
