@@ -20,6 +20,10 @@
 #include <stdint.h>
 #include <qc12.h>
 
+// todo: remove
+#include <oled.h>
+#include <stdio.h>
+
 const uint8_t FLASH_STATE_WREN  = BIT1;
 const uint8_t FLASH_STATE_SLEEP = BIT2;
 const uint8_t FLASH_STATE_BUSY  = BIT3;
@@ -76,9 +80,7 @@ void flash_begin() {
     // If we're held, wait:
     // TODO: don't busy wait.
     while (flash_state & FLASH_STATE_HOLD);
-    for (uint8_t i=0; i<34; i++) {
-        usci_a0_send_sync(0x00); // Flush out the shift register on the TI chip
-    }
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
     P1OUT &= ~BIT1; // CS low, select.
 }
 
@@ -86,7 +88,6 @@ void flash_end() {
     // TODO:
     while (flash_state & FLASH_STATE_HOLD);
     P1OUT |= BIT1; // CS high, deselect.
-
 }
 
 void flash_simple_cmd(uint8_t cmd) {
@@ -192,19 +193,32 @@ void flash_wake() {
 }
 
 void init_flash() {
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN1);
+    GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN0);
     flash_state = 0;
     flash_get_status();
+}
+
+void usci_a_send(uint16_t base, uint8_t data) {
+    EUSCI_A_SPI_transmitData(base, data);
+    while (!EUSCI_A_SPI_getInterruptStatus(base,
+            EUSCI_A_SPI_TRANSMIT_INTERRUPT));
+    while (EUSCI_A_SPI_isBusy(base));
 }
 
 // Do a test of the flash.
 // Returns 1 if a problem is detected.
 uint8_t flash_post() {
-    uint8_t initial_status = flash_get_status();
+    volatile uint8_t status;
+    volatile uint8_t initial_status = flash_get_status();
     flash_wr_en();
-    if (flash_get_status() != (initial_status | BIT1))
+    status = flash_get_status();
+    if (status != (initial_status | BIT1))
         return 1;
     flash_wr_dis();
-    if (flash_get_status() != (initial_status & ~BIT1))
+    status = flash_get_status();
+    if (status != (initial_status & ~BIT1))
         return 1;
     return 0;
 }

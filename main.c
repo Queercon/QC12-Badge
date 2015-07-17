@@ -92,9 +92,11 @@ void post() {
     // If the radio is super-broken, we won't even get here.
     // Check the crystal.
     uint8_t crystal_error = CSCTL5 & LFXTOFFG;
+
     // Check the shift register of the TLC.
     uint8_t led_error = tlc_test_loopback(0b10101010);
     led_error = led_error || tlc_test_loopback(0b01010101);
+
     // Check the flash chip.
     EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
     EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_TRANSMIT_INTERRUPT);
@@ -298,11 +300,15 @@ int main(void)
     GrStringDraw(&g_sContext, "XMIT 1", -1, 5, 13, 1);
     GrFlush(&g_sContext);
     radio_send_sync();
+    while (!f_rfm_tx_done);
+    f_rfm_tx_done = 0;
     delay(1000);
 
     GrStringDraw(&g_sContext, "XMIT 2", -1, 5, 25, 1);
     GrFlush(&g_sContext);
     radio_send_sync();
+    while (!f_rfm_tx_done);
+    f_rfm_tx_done = 0;
     delay(1000);
 
     tlc_start_anim(rainbow2, 5, 60, 1);
