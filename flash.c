@@ -76,6 +76,9 @@ void flash_begin() {
     // If we're held, wait:
     // TODO: don't busy wait.
     while (flash_state & FLASH_STATE_HOLD);
+    for (uint8_t i=0; i<34; i++) {
+        usci_a0_send_sync(0x00); // Flush out the shift register on the TI chip
+    }
     P1OUT &= ~BIT1; // CS low, select.
 }
 

@@ -133,6 +133,8 @@ void post() {
         print_loc += 12;
     }
 
+    GrFlush(&g_sContext);
+
     delay(5000);
 }
 
@@ -293,11 +295,15 @@ int main(void)
     post();
 
     // Fart something out on the radio.
+    GrStringDraw(&g_sContext, "XMIT 1", -1, 5, 13, 1);
+    GrFlush(&g_sContext);
     radio_send_sync();
     delay(1000);
+
+    GrStringDraw(&g_sContext, "XMIT 2", -1, 5, 25, 1);
+    GrFlush(&g_sContext);
     radio_send_sync();
     delay(1000);
-    radio_send_sync();
 
     tlc_start_anim(rainbow2, 5, 60, 1);
 

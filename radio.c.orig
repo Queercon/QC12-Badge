@@ -41,9 +41,7 @@ volatile uint8_t rfm_reg_state = RFM_REG_IDLE;
 // The protocol machine:
 volatile uint8_t rfm_proto_state = 0;
 
-qc12payload in_payload;
-qc12payload out_payload = {0xff, 1, 1, 0};
-
+qc12payload in_payload, out_payload;
 
 // temp buffer:
 uint8_t in_bytes[sizeof(in_payload)];
@@ -56,7 +54,7 @@ uint8_t in_bytes[sizeof(in_payload)];
 
 void delay(unsigned int ms) {
 	while (ms--)
-		__delay_cycles(8000);
+		__delay_cycles(4000);
 }
 
 
@@ -70,7 +68,7 @@ void init_radio() {
 	//  module is ready
 
 	GPIO_setOutputHighOnPin(RESET_PORT, RESET_PIN);
-	delay(10);
+	delay(1);
 	GPIO_setOutputLowOnPin(RESET_PORT, RESET_PIN);
 	delay(10);
 
@@ -83,45 +81,21 @@ void init_radio() {
 	rfm_reg_state = RFM_REG_IDLE;
 	mode_sync(RFM_MODE_SB);
 
-	// One weird thing about this radio module. The datasheet lists
-	// "default (recommended)" values for the config registers. For all but
-	// 8 registers, these are truly default; however, for those 8, the
-	// "default" values and "reset (built-in)" values (the latter of which I
-	// would describe as "default," and the former, "recommended," but what
-	// do I know?) are different. Those are:
-	//   Addr Name           Desc
-	//   0x18 RegLna         LNA settings
-	//   0x19 RegRxBw        Channel filter bandwidth control
-	//   0x8b RegAfcBw       Channel filter bandwidth control during AFC
-	//   0x26 RegDioMapping2 Mapping DIO5, ClkOut frequency
-	//   0x29 RegRssiThresh  RSSI Threshold control
-	// 0x2f-
-	//  -0x36 RegSyncValue   Sync Word bytes 1-8
-	//   0x3c RegFifoThresh  Fifo threshold, Tx start condition
-	//   0x6f RegTestDagc    Fading Margin Improvement
-
 	// init radio to recommended "defaults" (seriously, wtf are they
 	//  calling them defaults for if they're not set BY DEFAULT?????
 	//  Sheesh.), per datasheet:
 	write_single_register(0x18, 0b00001000); // Low-noise amplifier
 	write_single_register(0x19, 0b01010101); // Bandwidth control "default"
+	//  write_single_register(0x1a, 0b10001011); // Auto Frequency Correction BW
 	write_single_register(0x1a, 0x8b); // Auto Frequency Correction BW "default"
 	write_single_register(0x26, 0x07); // Disable ClkOut
 	write_single_register(0x29, 210); // RSSI Threshold
 
-	// Other configuration:
-
-//	write_single_register(0x3c, sizeof(qc12payload)); //TODO???
-
 	/// Output configuration:
 	write_single_register(0x11, 0b10011111); // Output power
-//	write_single_register(0x12, 0b00001111); // PA0 ramp time
+	//  write_single_register(0x12, 0b00001111); // PA0 ramp time
 
 	write_single_register(0x25, 0b00000000); // GPIO map to default
-
-    for (uint8_t sync_addr=0x2f; sync_addr<=0x36; sync_addr++) {
-        write_single_register(sync_addr, "QCXI"[sync_addr%4]);
-    }
 
 	// Setup addresses and length:
 	write_single_register(0x37, 0b00110100); // Packet configuration (see DS)
@@ -129,8 +103,11 @@ void init_radio() {
 	write_single_register(0x39, my_conf.badge_id); // NodeAddress
 	write_single_register(0x3A, RFM_BROADCAST); // BroadcastAddress
 
-	write_single_register(0x3c, 0x80 | (sizeof(qc12payload)-1)); // TxStartCondition - FifoNotEmpty
+	write_single_register(0x3c, 0x80 & (sizeof(qc12payload)-1)); // TxStartCondition - FifoNotEmpty // TODO
 
+	for (uint8_t sync_addr=0x2f; sync_addr<=0x36; sync_addr++) {
+	    write_single_register(sync_addr, "QCXI"[sync_addr%4]);
+	}
 
 	// Now that we're done with this setup business, we can enable the
 	// DIO interrupts. We have to wait until now because otherwise if
@@ -138,14 +115,14 @@ void init_radio() {
 	// state machine way too early, which can cause the system to hang
 	// indefinitely.
 
-	// Auto packet mode: RX->SB->RX on receive.
 	mode_sync(RFM_MODE_RX);
-	write_single_register(0x3b, RFM_AUTOMODE_RX);
+    // Auto packet mode: RX->SB->RX on receive.
+//	write_single_register(0x3b, RFM_AUTOMODE_RX);
 	volatile uint8_t ret = 0;
 
+    GPIO_clearInterrupt(DIO_PORT, DIO_PIN);
+	GPIO_enableInterrupt(DIO_PORT, DIO_PIN);
 	GPIO_selectInterruptEdge(DIO_PORT, DIO_PIN, GPIO_LOW_TO_HIGH_TRANSITION);
-	GPIO_clearInterrupt(DIO_PORT, DIO_PIN);
-    GPIO_enableInterrupt(DIO_PORT, DIO_PIN);
 
 	ret = read_single_register_sync(0x01);
 
@@ -175,7 +152,7 @@ uint8_t read_single_register_sync(uint8_t addr) {
 	while (rfm_reg_state != RFM_REG_IDLE); // Block until ready to read.
 	rfm_reg_state = RFM_REG_RX_SINGLE_CMD;
 	addr = 0b01111111 & addr; // MSB=0 => write command
-	// Hold NSS low to begin frame.
+//	GPIO_setOutputLowOnPin(RFM_NSS_PORT, RFM_NSS_PIN); // Hold NSS low to begin frame.
 	RFM_NSS_PORT_OUT &= ~RFM_NSS_PIN;
 	EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, addr); // Send our command.
 	while (rfm_reg_state != RFM_REG_IDLE); // Block until read finished.
@@ -186,7 +163,7 @@ void mode_sync(uint8_t mode) {
 	while (rfm_reg_state != RFM_REG_IDLE);
 	write_single_register_async(RFM_OPMODE, mode);
 	while (rfm_reg_state != RFM_REG_IDLE);
-	uint8_t reg_read;
+	volatile uint8_t reg_read, mode_read;
 	do {
 		reg_read = read_single_register_sync(RFM_IRQ1);
 	}
@@ -198,22 +175,29 @@ uint8_t expected_dio_interrupt = 0;
 void radio_send_sync() {
 	// Wait for, e.g., completion of receiving something.
 	while (rfm_reg_state != RFM_REG_IDLE);
-	mode_sync(RFM_MODE_SB);
-	// Intermediate mode is TX
-	// Enter condition is FIFO level
-	// Exit condition is PacketSent.
-	// During sending, let's set the end mode to RX
-	write_single_register(0x3b, RFM_AUTOMODE_TX); // TODO: 0b00111011 ???
 
+	// Here's an automode:
+	mode_sync(RFM_MODE_SB);
+	write_single_register(0x3b, 0b00111011);
+
+
+	// TX mode:
+//	mode_sync(RFM_MODE_TX);
 	expected_dio_interrupt = 1; // will be xmit finished.
 
 	rfm_reg_state = RFM_REG_TX_FIFO_CMD;
      // Hold NSS low to begin frame.
 	RFM_NSS_PORT_OUT &= ~RFM_NSS_PIN;
 	EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, RFM_FIFO | 0b10000000); // Send write command.
+    while (rfm_reg_state != RFM_REG_IDLE);
+	while (!f_rfm_tx_done) {
+	    volatile uint8_t ret;
+	    ret = read_single_register_sync(0x27);
+	    __no_operation();
+	}
 	while (rfm_reg_state != RFM_REG_IDLE);
-// I kinda think we already did this: TODO:
-//	write_single_register_async(RFM_OPMODE, RFM_MODE_RX); // Set the mode so we'll re-enter RX mode once xmit is done.
+    write_single_register_async(RFM_OPMODE, RFM_MODE_RX); // Set the mode so we'll re-enter RX mode once xmit is done.
+//	while (!f_rfm_tx_done);
 }
 
 inline void radio_recv_start() {
@@ -404,13 +388,11 @@ __interrupt void EUSCI_B0_ISR(void)
 	} // end of state machine (transitions)
 
 	if (rfm_reg_state == RFM_REG_IDLE) {
-//		GPIO_setOutputHighOnPin(RFM_NSS_PORT, RFM_NSS_PIN); // NSS high to end frame
-		RFM_NSS_PORT_OUT |= RFM_NSS_PIN;
+		RFM_NSS_PORT_OUT |= RFM_NSS_PIN; // NSS high to end frame
 	} else if (rfm_reg_state == RFM_REG_TX_FIFO_AM) { // Automode:
-//		GPIO_setOutputHighOnPin(RFM_NSS_PORT, RFM_NSS_PIN); // NSS high to end frame
-		RFM_NSS_PORT_OUT |= RFM_NSS_PIN;
+		RFM_NSS_PORT_OUT |= RFM_NSS_PIN; // NSS high to end frame
 		rfm_reg_state = RFM_REG_IDLE;
-		write_single_register_async(RFM_OPMODE, RFM_MODE_RX);
+//		write_single_register_async(RFM_OPMODE, RFM_MODE_RX); // TODO
 	}
 }
 

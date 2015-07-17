@@ -208,7 +208,7 @@ uint8_t tlc_test_loopback(uint8_t test_pattern) {
 
     EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
 
-    return tlc_loopback_data_in != (test_pattern << 7) | (test_pattern >> 1);
+    return tlc_loopback_data_in != (uint8_t) ((test_pattern << 7) | (test_pattern >> 1));
 }
 
 // Stage global brightness if different from default:
