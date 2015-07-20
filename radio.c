@@ -209,7 +209,8 @@ void radio_send_sync() {
     // Intermediate mode is TX
     // Enter condition is FIFO level
     // Exit condition is PacketSent.
-    // During sending, let's set the end mode to RX
+    // Then we'll go back to SB. Once the transmission completes, we'll go
+    // to the normal automode.
     write_single_register(0x3b, RFM_AUTOMODE_TX); // TODO: 0b00111011 ???
 
     expected_dio_interrupt = 1; // will be xmit finished.
@@ -220,8 +221,6 @@ void radio_send_sync() {
     EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, RFM_FIFO | 0b10000000); // Send write command.
     while (rfm_reg_state != RFM_REG_IDLE)
         ;
-// I kinda think we already did this: TODO:
-//	write_single_register_async(RFM_OPMODE, RFM_MODE_RX); // Set the mode so we'll re-enter RX mode once xmit is done.
 }
 
 inline void radio_recv_start() {
@@ -416,11 +415,11 @@ __interrupt void EUSCI_B0_ISR(void) {
     if (rfm_reg_state == RFM_REG_IDLE) {
         // NSS high to end frame
         RFM_NSS_PORT_OUT |= RFM_NSS_PIN;
-    } else if (rfm_reg_state == RFM_REG_TX_FIFO_AM) { // Automode:
+    } else if (rfm_reg_state == RFM_REG_TX_FIFO_AM) {
+        // Just finished loading the FIFO:
         // NSS high to end frame
         RFM_NSS_PORT_OUT |= RFM_NSS_PIN;
         rfm_reg_state = RFM_REG_IDLE;
-        write_single_register_async(RFM_OPMODE, RFM_MODE_RX);
     }
 }
 
@@ -432,9 +431,14 @@ __interrupt void radio_interrupt_0(void) {
     switch (P3IV) {
     case BIT2:
         if (expected_dio_interrupt) { // tx finished.
-            // Auto packet mode: RX->SB->RX on receive.
-            f_rfm_tx_done = 1; // TODO
+            // The automode logic will have put us back into SB mode at this
+            // point. So raise our interrupt flag for tx_done...
+            f_rfm_tx_done = 1;
             expected_dio_interrupt = 0;
+            // And return to our normal receive automode:
+            // RX->SB->RX on receive.
+            write_single_register(0x3b, RFM_AUTOMODE_RX);
+            write_single_register_async(RFM_OPMODE, RFM_MODE_RX);
         } else { // rx
             radio_recv_start();
         }
