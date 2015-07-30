@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <qc12.h>
+extern uint8_t fun_base[];
 
 const uint8_t FLASH_STATE_WREN  = BIT1;
 const uint8_t FLASH_STATE_SLEEP = BIT2;
@@ -43,13 +44,9 @@ const uint8_t FLASH_CMD_CHIP_ERASE = 0xC7; // TODO: delay after these three:
 const uint8_t FLASH_CMD_POWER_DOWN = 0xB9;
 const uint8_t FLASH_CMD_POWER_UP = 0xAB;
 
-void usci_a0_send_sync(uint8_t data) {
-    // If we're held, wait:
-    // TODO: don't busy wait.
-    while (flash_state & FLASH_STATE_HOLD);
+uint8_t flash_bytes_left = 0;
 
-//    while (!EUSCI_A_SPI_getInterruptStatus(EUSCI_A0_BASE,
-//              EUSCI_A_SPI_TRANSMIT_INTERRUPT));
+void usci_a0_send_sync(uint8_t data) {
     EUSCI_A_SPI_transmitData(EUSCI_A0_BASE, data);
     while (!EUSCI_A_SPI_getInterruptStatus(EUSCI_A0_BASE,
               EUSCI_A_SPI_TRANSMIT_INTERRUPT));
@@ -58,12 +55,27 @@ void usci_a0_send_sync(uint8_t data) {
     EUSCI_A_SPI_receiveData(EUSCI_A0_BASE); // Throw away the stale garbage we got while sending.
 }
 
+void hold_send_fun() {
+    // hold
+    GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN0);
+    usci_a0_send_sync(0x01); // THISISFUN
+    for (uint8_t i=0; i<34; i++) {
+        if (i == 18) {
+            UCA0CTLW0 |= UCSWRST;
+            UCA0CTLW0 |= UC7BIT;
+            UCA0CTLW0 &= ~UCSWRST;
+        }
+        usci_a0_send_sync(fun_base[i]);
+    }
+    GPIO_pulse(TLC_LATPORT, TLC_LATPIN); // LATCH.
+    UCA0CTLW0 |= UCSWRST;
+    UCA0CTLW0 &= ~UC7BIT;
+    UCA0CTLW0 &= ~UCSWRST;
+    // unhold
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+}
+
 uint8_t usci_a0_recv_sync(uint8_t data) {
-    // If we're held, wait:
-    // TODO: don't busy wait.
-    while (flash_state & FLASH_STATE_HOLD);
-//    while (!EUSCI_A_SPI_getInterruptStatus(EUSCI_A0_BASE,
-//              EUSCI_A_SPI_TRANSMIT_INTERRUPT));
     EUSCI_A_SPI_transmitData(EUSCI_A0_BASE, data);
     while (!EUSCI_A_SPI_getInterruptStatus(EUSCI_A0_BASE,
               EUSCI_A_SPI_TRANSMIT_INTERRUPT));
@@ -72,23 +84,40 @@ uint8_t usci_a0_recv_sync(uint8_t data) {
     return EUSCI_A_SPI_receiveData(EUSCI_A0_BASE);
 }
 
+uint8_t flash_spi_recv(uint8_t data) {
+    if (!flash_bytes_left) {
+        hold_send_fun();
+        flash_bytes_left = 31; // TODO, can probably be 32?
+    }
+
+    flash_bytes_left--;
+    return usci_a0_recv_sync(data);
+}
+
+void flash_spi_send(uint8_t data) {
+    if (!flash_bytes_left) {
+        hold_send_fun();
+        flash_bytes_left = 31; // TODO, can probably be 32?
+    }
+
+    usci_a0_send_sync(data);
+    flash_bytes_left--;
+}
+
+
+
 void flash_begin() {
-    // If we're held, wait:
-    // TODO: don't busy wait.
-    while (flash_state & FLASH_STATE_HOLD);
-    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+    flash_bytes_left = 0;
     P1OUT &= ~BIT1; // CS low, select.
 }
 
 void flash_end() {
-    // TODO:
-    while (flash_state & FLASH_STATE_HOLD);
     P1OUT |= BIT1; // CS high, deselect.
 }
 
 void flash_simple_cmd(uint8_t cmd) {
     flash_begin();
-    usci_a0_send_sync(cmd);
+    flash_spi_send(cmd);
     flash_end();
 }
 
@@ -102,8 +131,8 @@ void flash_wr_dis() {
 
 uint8_t flash_get_status() {
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_READ_STATUS);
-    uint8_t retval = usci_a0_recv_sync(0xff);
+    flash_spi_send(FLASH_CMD_READ_STATUS);
+    uint8_t retval = flash_spi_recv(0xff);
     flash_end();
     flash_status_register = retval;
     return retval;
@@ -111,8 +140,8 @@ uint8_t flash_get_status() {
 
 uint8_t flash_set_status(uint8_t status) {
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_WRITE_STATUS);
-    usci_a0_send_sync(status);
+    flash_spi_send(FLASH_CMD_WRITE_STATUS);
+    flash_spi_send(status);
     flash_end();
     return flash_get_status() == status;
 }
@@ -126,13 +155,13 @@ void flash_block_while_wip() {
 void flash_read_data(uint32_t address, uint32_t len_bytes, uint8_t* buffer) {
     flash_block_while_wip();
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_READ_DATA);
-    usci_a0_send_sync((address & 0x00FF0000) >> 16); // MSByte of address
-    usci_a0_send_sync((address & 0x0000FF00) >> 8); // Middle byte of address
-    usci_a0_send_sync((address & 0x000000FF)); // LSByte of address
+    flash_spi_send(FLASH_CMD_READ_DATA);
+    flash_spi_send((address & 0x00FF0000) >> 16); // MSByte of address
+    flash_spi_send((address & 0x0000FF00) >> 8); // Middle byte of address
+    flash_spi_send((address & 0x000000FF)); // LSByte of address
     // TODO: should be done with DMA, probably.
     for (uint32_t i = 0; i < len_bytes; i++) {
-        buffer[i] = usci_a0_recv_sync(0xff);
+        buffer[i] = flash_spi_recv(0xff);
     }
     flash_end();
 }
@@ -141,13 +170,13 @@ void flash_write_data(uint32_t address, uint8_t len_bytes, uint8_t* buffer) {
     // Length may not be any longer than 255.
     flash_block_while_wip();
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_PAGE_PROGRAM);
-    usci_a0_send_sync((address & 0x00FF0000) >> 16); // MSByte of address
-    usci_a0_send_sync((address & 0x0000FF00) >> 8); // Middle byte of address
-    usci_a0_send_sync((address & 0x000000FF)); // LSByte of address
+    flash_spi_send(FLASH_CMD_PAGE_PROGRAM);
+    flash_spi_send((address & 0x00FF0000) >> 16); // MSByte of address
+    flash_spi_send((address & 0x0000FF00) >> 8); // Middle byte of address
+    flash_spi_send((address & 0x000000FF)); // LSByte of address
     // TODO: should be done with DMA, probably.
     for (uint8_t i = 0; i < len_bytes; i++) {
-        usci_a0_send_sync(buffer[i]);
+        flash_spi_send(buffer[i]);
     }
     flash_end();
 }
@@ -160,20 +189,20 @@ void flash_erase_chip() {
 void flash_erase_block_64kb(uint32_t address) {
     flash_block_while_wip();
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_BLOCK_ERASE);
-    usci_a0_send_sync((address & 0x00FF0000) >> 16); // MSByte of address
-    usci_a0_send_sync((address & 0x0000FF00) >> 8); // Middle byte of address
-    usci_a0_send_sync((address & 0x000000FF)); // LSByte of address
+    flash_spi_send(FLASH_CMD_BLOCK_ERASE);
+    flash_spi_send((address & 0x00FF0000) >> 16); // MSByte of address
+    flash_spi_send((address & 0x0000FF00) >> 8); // Middle byte of address
+    flash_spi_send((address & 0x000000FF)); // LSByte of address
     flash_end();
 }
 
 void flash_erase_sector_4kb(uint32_t address) {
     flash_block_while_wip();
     flash_begin();
-    usci_a0_send_sync(FLASH_CMD_SECTOR_ERASE);
-    usci_a0_send_sync((address & 0x00FF0000) >> 16); // MSByte of address
-    usci_a0_send_sync((address & 0x0000FF00) >> 8); // Middle byte of address
-    usci_a0_send_sync((address & 0x000000FF)); // LSByte of address
+    flash_spi_send(FLASH_CMD_SECTOR_ERASE);
+    flash_spi_send((address & 0x00FF0000) >> 16); // MSByte of address
+    flash_spi_send((address & 0x0000FF00) >> 8); // Middle byte of address
+    flash_spi_send((address & 0x000000FF)); // LSByte of address
     flash_end();
 }
 

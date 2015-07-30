@@ -315,6 +315,8 @@ void init() {
     init_radio();
     init_oled();
     init_rtc();
+
+
     srand(my_conf.badge_id);
 }
 
@@ -1347,12 +1349,30 @@ void handle_mode_rps() {
     }
 }
 
+void flash_read_write_test() {
+    tlc_set_fun();
+    EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
+    EUSCI_A_SPI_disableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_TRANSMIT_INTERRUPT);
+
+
+    volatile uint8_t buf[sizeof(rgbcolor_t) * 6];
+    memcpy(buf, flag_rainbow.colors, sizeof(rgbcolor_t) * 6);
+    flash_write_data(0, sizeof(rgbcolor_t) * 6, buf);
+    flash_read_data(0, sizeof(rgbcolor_t) * 6, buf);
+
+    EUSCI_A_SPI_clearInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
+    EUSCI_A_SPI_enableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_RECEIVE_INTERRUPT);
+    EUSCI_A_SPI_clearInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_TRANSMIT_INTERRUPT);
+    EUSCI_A_SPI_enableInterrupt(EUSCI_A0_BASE, EUSCI_A_SPI_TRANSMIT_INTERRUPT);
+}
+
 int main(void)
 {
     init();
     intro();
     delay(1000);
     post();
+    flash_read_write_test();
 
     GrClearDisplay(&g_sContext);
 
