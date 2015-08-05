@@ -20,7 +20,7 @@
 
 // System configuration
 #define BADGES_IN_SYSTEM 174
-#define BASES_IN_SYSTEM 5
+#define BASES_IN_SYSTEM 7
 #define UBERS_IN_SYSTEM 12
 #define SLEEP_BITS LPM1_bits // because we need SMCLK for the TLC.
 #define NUM_ACHIEVEMENTS 28
