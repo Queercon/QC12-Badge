@@ -189,11 +189,12 @@ def show_char(head_files, body_files, legs_files, heights, indices, thumb_id):
         
         sprite_image, sprite_mask = adjust_image(sprite)
         done_combos.append(indices)
-        if len(done_combos) == 66:
-            if thumb_id or thumb_id==0:
-                combo_image.save(os.path.join("thumbs", "spritesheets", "all_%03d.png") % thumb_id)
-            else:
-                combo_image.show()
+        
+        #if len(done_combos) == 66:
+        if thumb_id or thumb_id==0:#
+            combo_image.save(os.path.join("thumbs", "spritesheets", "all_%03d.png") % thumb_id)
+        else:
+            combo_image.show()
 
 def make_thumbs(thumb_id, head_files, body_files, legs_files, heights):
     head_img, head_mask = adjust_image(Image.open(head_files[0]))
@@ -502,7 +503,7 @@ if (__name__ == '__main__'):
     human_computed_ids = [19,27,28,30,31,32,33,52,53,54,56,60,61,62,72,75,76,77,78,80,81,82,85,86,87,90,92,99,103,104,106,111,112,114,116,117,120,122,124,127,130,133,136,137,138,141,143,145,146,149,150,151,152,154,157,158,163,164,169,180,185,187,188,194,195,196,197,198,199,200,205,208,209,211,217,220,228,229,230,231]
     
     if 'id' in args:
-        if (args.id >= 15):
+        if (args.id >= 12):
             l = list(itertools.product(human_dirs, repeat=3))
             head, body, legs = l[(human_computed_ids[(args.id-15) % len(human_computed_ids)]-15) % len(l)]
         else:
